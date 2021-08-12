@@ -1,40 +1,916 @@
 ---
 layout: post
-title: "Dinosaurs are extinct today"
-subtitle: "because they lacked opposable thumbs and the brainpower to build a space program."
-date: 2020-01-26 23:45:13 -0400
+title: "Computing EOFs for Air and Ocean temperature"
+subtitle: "in 3 Dimensional Space."
+date: 2021-08-12 23:45:13 -0400
 background: '/img/posts/01.jpg'
 ---
+```python
+import netCDF4 as nc
+from netCDF4 import Dataset
+import numpy as np
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
+import plotly
+import plotly.express as px
+import pandas as pd
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+import scipy.linalg as la
+import scipy
+import math
+from __future__ import print_function
+from ipywidgets import interact, interactive, fixed, interact_manual
+import ipywidgets as widgets
+import os
+os.environ["PROJ_LIB"] = "C:\\Utilities\\Python\\Anaconda\\Library\\share"; #fixr
+from mpl_toolkits.basemap import Basemap
+```
 
-<p>Never in all their history have men been able truly to conceive of the world as one: a single sphere, a globe, having the qualities of a globe, a round earth in which all the directions eventually meet, in which there is no center because every point, or none, is center — an equal earth which all men occupy as equals. The airman's earth, if free men make it, will be truly round: a globe in practice, not in theory.</p>
+# Downloading Data
 
-<p>Science cuts two ways, of course; its products can be used for both good and evil. But there's no turning back from science. The early warnings about technological dangers also come from science.</p>
 
-<p>What was most significant about the lunar voyage was not that man set foot on the Moon but that they set eye on the earth.</p>
+```python
+#for year in years:
+#   url = 'https://downloads.psl.noaa.gov/Datasets/godas/pottmp.'+str(year)+'.nc'
+#    r = requests.get(url, allow_redirects = True)
+#    open('pottmp.'+str(year)+'.nc', 'wb').write(r.content)
+```
 
-<p>A Chinese tale tells of some men sent to harm a young girl who, upon seeing her beauty, become her protectors rather than her violators. That's how I felt seeing the Earth for the first time. I could not help but love and cherish her.</p>
+# Compiling and Reformatting Datasets
 
-<p>For those who have seen the Earth from space, and for the hundreds and perhaps thousands more who will, the experience most certainly changes your perspective. The things that we share in our world are far more valuable than those which divide us.</p>
 
-<h2 class="section-heading">The Final Frontier</h2>
+```python
+file = 'C:/Users/tbui0/Downloads/air.mon.mean.nc'
+AirData = nc.Dataset(file)
 
-<p>There can be no thought of finishing for ‘aiming for the stars.’ Both figuratively and literally, it is a task to occupy the generations. And no matter how much progress one makes, there is always the thrill of just beginning.</p>
+```
 
-<p>There can be no thought of finishing for ‘aiming for the stars.’ Both figuratively and literally, it is a task to occupy the generations. And no matter how much progress one makes, there is always the thrill of just beginning.</p>
 
-<blockquote class="blockquote">The dreams of yesterday are the hopes of today and the reality of tomorrow. Science has not yet mastered prophecy. We predict too much for the next year and yet far too little for the next ten.</blockquote>
+```python
+years = np.arange(1980,2013)
+WaterData = []
+for year in years:
+    file = 'C:/Users/tbui0/Yearly Pottmps/pottmp.'+str(year)+'.nc'
+    WaterData.append(nc.Dataset(file))
 
-<p>Spaceflights cannot be stopped. This is not the work of any one man or even a group of men. It is a historical process which mankind is carrying out in accordance with the natural laws of human development.</p>
+```
 
-<h2 class="section-heading">Reaching for the Stars</h2>
 
-<p>As we got further and further away, it [the Earth] diminished in size. Finally it shrank to the size of a marble, the most beautiful you can imagine. That beautiful, warm, living object looked so fragile, so delicate, that if you touched it with a finger it would crumble and fall apart. Seeing this has to change a man.</p>
+```python
+lats = AirData.variables['lat'][:]
+lons = AirData.variables['lon'][:]
+time = AirData.variables['time'][:]
+air = AirData.variables['air'][:]
+levels = AirData.variables['level'][:]
+```
 
-<img class="img-fluid" src="https://source.unsplash.com/Mn9Fa_wQH-M/800x450" alt="Demo Image">
-<span class="caption text-muted">To go places and do things that have never been done before – that’s what living is all about.</span>
 
-<p>Space, the final frontier. These are the voyages of the Starship Enterprise. Its five-year mission: to explore strange new worlds, to seek out new life and new civilizations, to boldly go where no man has gone before.</p>
+```python
+air = air[(1980-1871)*12::12, :,:,:]
+```
 
-<p>As I stand out here in the wonders of the unknown at Hadley, I sort of realize there’s a fundamental truth to our nature, Man must explore, and this is exploration at its greatest.</p>
 
-<p>Placeholder text by <a href="http://spaceipsum.com/">Space Ipsum</a>. Photographs by <a href="https://unsplash.com/">Unsplash</a>.</p>
+```python
+CombinedData = []
+for g in range(0, len(WaterData)):
+    YEARLY_AIR = np.array(air[g].flatten()).tolist()
+    ANNUAL_WATER = WaterData[g].variables['pottmp'][:]
+    YEARLY_WATER = np.array(ANNUAL_WATER[0].flatten()).tolist()
+    CombinedData.append(YEARLY_AIR + YEARLY_WATER)
+CombinedData = np.array(CombinedData).T
+CombinedData.shape
+```
+
+
+
+
+    (33, 6412320)
+
+
+
+
+```python
+#Replaces with Nan because of how GODAS data is formatted
+for i in range(0, CombinedData.shape[0]):
+    for j in range(0, CombinedData.shape[1]):
+        if (CombinedData[i,j] < 0):
+            CombinedData[i,j] = np.nan
+```
+
+
+```python
+np.save('JanuaryRaw.npy', CombinedData)
+```
+
+
+```python
+CombinedData = np.load('JanuaryRaw.npy')
+```
+
+# Basic Computations (anomalies, climatology, Standard Deviation, etc)
+
+
+```python
+import warnings
+with warnings.catch_warnings():
+    warnings.simplefilter("ignore", category=RuntimeWarning)
+    clim = np.nanmean(CombinedData, axis=1)
+    sdev = np.nanstd(CombinedData, axis = 1)
+```
+
+
+```python
+clim = np.reshape(clim, (clim.size, 1))
+sdev = np.reshape(sdev, (sdev.size,1))
+```
+
+
+```python
+waterlons = np.array(WaterData[0].variables['lon'][:])
+waterlats = np.array(WaterData[0].variables['lat'][:])
+xxwater, yywater = np.meshgrid(waterlons, waterlats)
+xxair, yyair = np.meshgrid(lons, lats)
+depths =WaterData[0].variables['level'][:]
+depths.size
+```
+
+
+
+
+    40
+
+
+
+
+```python
+def f(aw, p, m):
+    if aw == 1:
+        plt.figure(figsize=(10,4))
+        plt.contourf(xxwater,yywater, np.reshape(clim[air[0].size+360*418*m:air[0].size+360*418*(m+1),0],(418,360)),1000, cmap= 'twilight_shifted')
+        plt.title('Climatology at Depth ' + str(depths[m]) + ' meters below Sea Level')
+        plt.colorbar()
+        plt.show()
+    else:
+        plt.figure(figsize=(10,5))
+        plt.contourf(xxair,yyair, np.reshape(clim[91*180*p:91*180*(p+1),0],(91,180)),1000, cmap= 'twilight_shifted')
+        plt.title('Climatology at ' + str(levels[p]) + ' hPa')
+        plt.colorbar()
+        plt.show()
+interactive(f, aw= (0,1), p = (0, levels.size), m = (0,depths.size))
+```
+
+
+    interactive(children=(IntSlider(value=0, description='aw', max=1), IntSlider(value=12, description='p', max=24…
+
+
+
+```python
+anomalies = CombinedData - clim
+```
+
+
+```python
+np.save('JanuaryRawAnomalies.npy', anomalies)
+
+```
+
+
+```python
+anom = np.load('JanuaryRawAnomalies.npy')
+```
+
+
+```python
+def f(aw, year, m, p):
+    if aw == 1:
+        plt.figure(figsize=(10,4))
+        plt.contourf(xxwater,yywater, np.reshape(anom[air[0].size+360*418*m:air[0].size+360*418*(m+1),year-1980],(418,360)),1000, cmap= 'jet')
+        plt.colorbar()
+        plt.title('January Anomalies at '+ str(depths[m])+ ' m '+  str(year))
+    else: 
+        plt.figure(figsize=(10,5))
+        plt.contourf(xxair,yyair, np.reshape(anom[91*180*p:91*180*(p+1),year-1980],(91,180)),1000, cmap= 'jet')
+        plt.colorbar()
+        plt.title('January Anomalies at '+  str(levels[p])+ ' hPa '+ str(year))
+interactive(f, aw = (0,1), year = (1980,2012), m = (0, depths.size), p = (0, levels.size))
+```
+
+
+    interactive(children=(IntSlider(value=0, description='aw', max=1), IntSlider(value=1996, description='year', m…
+
+
+
+```python
+#standardized anomalies
+np.seterr(divide='ignore', invalid='ignore')
+stnd_anom = (CombinedData - clim)/ sdev
+```
+
+
+```python
+np.save('StandardizedCombined.npy', stnd_anom)
+```
+
+
+```python
+stnd_anom = np.load('StandardizedCombined.npy')
+
+```
+
+
+```python
+def f(aw, year, m, p):
+    if aw == 1:
+        plt.figure(figsize=(10,4))
+        plt.contourf(xxwater,yywater, np.reshape(StdData[air[0].size+360*418*m:air[0].size+360*418*(m+1),year-1980],(418,360)),1000, cmap= 'jet')
+        plt.colorbar()
+        plt.title('January Standardized Anomalies at '+ str(depths[m])+ ' m '+  str(year))
+    else: 
+        plt.figure(figsize=(10,5))
+        plt.contourf(xxair,yyair, np.reshape(StdData[91*180*p:91*180*(p+1),year-1980],(91,180)),1000, cmap= 'jet')
+        plt.colorbar()
+        plt.title('January Standardized Anomalies at '+  str(levels[p])+ ' hPa '+ str(year))
+interactive(f, aw = (0,1), year = (1980,2012), m = (0, depths.size), p = (0, levels.size))
+```
+
+
+    interactive(children=(IntSlider(value=0, description='aw', max=1), IntSlider(value=1996, description='year', m…
+
+
+# Weight Computations
+
+$$ \sqrt{c_p \rho \Delta d_{ij}  \cos{\phi}\Delta \theta \Delta \phi }$$
+
+
+```python
+lats4air = np.array(yyair).flatten().tolist()
+lats4water = np.array(yywater).flatten().tolist()
+```
+
+
+```python
+lats4weighing = []
+for i in range(levels.size):
+    lats4weighing += lats4air
+for j in range(depths.size):
+    lats4weighing += lats4water
+```
+
+
+```python
+lats4weighing = np.array(lats4weighing)
+lats4weighing.shape
+```
+
+
+
+
+    (6412320,)
+
+
+
+
+```python
+#cos phi
+weightedA = np.sqrt(np.cos(lats4weighing*np.pi/180))
+weightedA = np.reshape(weightedA, (weightedA.size, 1))
+weightedA.shape
+```
+
+
+```python
+weightedAnom = stnd_anom * weightedA
+```
+
+
+```python
+airclim = clim[0:air[0].size]
+airclim.size
+```
+
+
+
+
+    393120
+
+
+
+ Height calculations
+ $$ P = P_0 e^{\frac{-gM(h-h_0)}{RT}}$$
+
+
+```python
+r = 8.31432
+g = -9.8
+m = 0.0289644
+```
+
+
+```python
+airheights= []
+for i in range(airclim.size):
+    airheights.append(airclim[i]*r * math.log(levels[int(i/(91*180))]/1013.25)/(g*m))
+airheights = np.array(airheights)
+```
+
+
+```python
+np.save('air height.npy', airheights)
+```
+
+
+```python
+airheights = np.load('air height.npy')
+```
+
+Thickness 
+$$ \Delta d_{ij}$$
+
+
+```python
+waterthickness = [5]
+for i in range(0,depths.size-1):
+    waterthickness.append(depths[i+1]-depths[i])
+waterthickness = np.array(waterthickness)
+waterthickness = np.reshape(waterthickness, (waterthickness.size, 1))
+```
+
+
+```python
+thickness = np.empty([stnd_anom.shape[0], 1])
+thickness[0:91*180] = airheights[0:91*180]
+for i in range(91*180, air[0].size):
+    thickness[i] = airheights[i] - airheights[i-91*180]
+for j in range(air[0].size, stnd_anom.shape[0]):
+    thickness[j] = waterthickness[int((j-air[0].size)/(360*418))]
+```
+
+$$ \Delta \theta \Delta \phi$$
+
+
+```python
+airgrid = 4
+watergrid = 1/3
+```
+
+
+```python
+gridSize = np.empty([weightedAnom.shape[0], 1])
+for i in range(0, air[0].size):
+    gridSize[i] = airgrid
+for j in range(air[0].size, gridSize.size):
+    gridSize[j] = watergrid
+```
+
+Air and Ocean Density
+
+
+```python
+waterdensity = 1000
+density = np.empty([weightedAnom.shape[0], 1])
+```
+
+
+```python
+for i in range(0,air[0].size):
+    density[i] =  levels[int(i/(91*180))]/(2.869*clim[i])
+for j in range(air[0].size,density.size):
+    density[j] = waterdensity
+```
+
+
+```python
+#Heat capacity
+cpair = 1.005
+cpwater = 4.812
+```
+
+
+```python
+heatCap = np.empty([weightedAnom.shape[0], 1])
+for i in range(0, air[0].size):
+    heatCap[i] = cpair
+for j in range(air[0].size, gridSize.size):
+    heatCap[j] = cpwater
+```
+
+
+```python
+vweightedanom = weightedAnom * np.sqrt(thickness) * np.sqrt(density) * np.sqrt(heatCap) * np.sqrt(gridSize)
+```
+
+
+```python
+np.save('Fully Weighted Anomalies.npy',vweightedanom)
+```
+
+
+```python
+matslessanom= vweightedanom/np.sqrt(heatCap)
+matslessanom /= np.sqrt(density)
+```
+
+
+```python
+vweightedanom[air[0].size+170]
+```
+
+
+
+
+    array([ 55.74235885,  47.80202568,  12.0146086 ,  53.05830257,
+            20.51412016,  23.75735483,  19.06025634,  39.19067845,
+            20.62595583,  12.23827996,  41.87473473,  40.30903523,
+            28.23078197,  25.88223272, -27.46562259,  11.67910156,
+             8.8832096 ,  55.63052317,  10.33707342,   0.83104076,
+            28.23078197,  27.0005895 ,  37.84865031, -43.23445324,
+            37.96048599, -65.82526028, -63.36487535, -81.70816332,
+           -76.78515676, -78.01534922, -64.1477251 , -78.1271849 ,
+           -80.02839143])
+
+
+
+
+```python
+matslessanom[air[0].size+170]
+```
+
+
+
+
+    array([ 0.80356781,  0.68910197,  0.17319957,  0.76487513,  0.29572639,
+            0.34248005,  0.27476786,  0.56496296,  0.29733859,  0.17642396,
+            0.60365564,  0.58108491,  0.40696785,  0.37311175, -0.3959375 ,
+            0.16836299,  0.12805811,  0.80195562,  0.14901665,  0.01198007,
+            0.40696785,  0.3892337 ,  0.54561662, -0.623257  ,  0.54722881,
+           -0.94892038, -0.91345209, -1.17788432, -1.10691549, -1.12464964,
+           -0.92473746, -1.12626183, -1.15366915])
+
+
+
+
+```python
+def f(aw, year, m, p):
+    if aw == 1:
+        plt.figure(figsize=(10,4))
+        plt.contourf(xxwater,yywater, np.reshape(vweightedanom[air[0].size+360*418*m:air[0].size+360*418*(m+1),year-1980],(418,360)),1000, cmap= 'jet')
+        plt.colorbar()
+        plt.title('January Weighted Anomalies at '+ str(depths[m])+ ' m '+  str(year))
+    else: 
+        plt.figure(figsize=(10,5))
+        plt.contourf(xxair,yyair, np.reshape(vweightedanom[91*180*p:91*180*(p+1),year-1980],(91,180)),1000, cmap= 'jet')
+        plt.colorbar()
+        plt.title('January Weighted Anomalies at '+  str(levels[p])+ ' hPa '+ str(year))
+interactive(f, aw = (0,1), year = (1980,2012), m = (0, depths.size), p = (0, levels.size))
+```
+
+
+    interactive(children=(IntSlider(value=0, description='aw', max=1), IntSlider(value=1996, description='year', m…
+
+
+# Cutting off final ocean layers in EOF computation
+
+
+```python
+vweightedanom.shape
+```
+
+
+
+
+    (6412320, 33)
+
+
+
+
+```python
+vweightedAnom = vweightedanom[0:air[0].size+360*418*34,:]
+vweightedAnom.shape
+```
+
+
+
+
+    (5509440, 33)
+
+
+
+
+```python
+matslessAnom = matslessanom[0:air[0].size+360*418*34,:]
+matslessAnom.shape
+```
+
+
+
+
+    (5509440, 33)
+
+
+
+# EOF computation and graphs
+
+
+```python
+df = pd.DataFrame(data = vweightedAnom)
+dropna = df.dropna()
+NanlessAnom = dropna.to_numpy()
+NanlessAnom.shape
+```
+
+
+
+
+    (3895864, 33)
+
+
+
+
+```python
+Sigma = np.matmul(NanlessAnom.T, NanlessAnom)
+eigenvalues, eigenvectors = scipy.linalg.eig(Sigma)
+```
+
+
+```python
+eigenvectors = eigenvectors.T
+```
+
+
+```python
+index = np.argsort(eigenvalues)[::-1]
+eigvals = eigenvalues[index]
+eigvecs = eigenvectors[index]
+
+```
+
+
+```python
+
+num_eval = np.arange(eigvals.shape[0])+1
+cumulative_eval = np.cumsum(eigvals)
+```
+
+
+```python
+#for i in range(eigvecs.shape[0]):
+  #  print(np.linalg.norm(eigvecs[i]))
+```
+
+
+```python
+plt.figure(figsize=(30., 14.))
+fig, ax = plt.subplots()
+
+p1, = plt.plot(num_eval,(eigvals/cumulative_eval[-1])*100, 'b', marker = 'o',label = 'Percentage Variance')
+ax.set_ylabel("Percentage Variance")
+ax.yaxis.label.set_color('blue')
+ax.tick_params('y', colors='b')
+
+ax2 = ax.twinx()
+p2, = plt.plot(num_eval,(cumulative_eval/cumulative_eval[-1])*100,'r', marker = 'x',label = 'Cumulative Percentage Variance')
+ax2.tick_params('y', colors='r')
+ax2.set_ylabel("Cumulative Percentage Variance")
+ax2.yaxis.label.set_color('red')
+
+plt.legend(handles=[p1,p2],loc='center right')
+
+plt.show()
+
+```
+
+    C:\Users\tbui0\Anaconda3\lib\site-packages\numpy\core\_asarray.py:83: ComplexWarning:
+    
+    Casting complex values to real discards the imaginary part
+    
+    C:\Users\tbui0\Anaconda3\lib\site-packages\numpy\core\_asarray.py:83: ComplexWarning:
+    
+    Casting complex values to real discards the imaginary part
+    
+    
+
+
+    <Figure size 2160x1008 with 0 Axes>
+
+
+
+    
+![png](output_65_2.png)
+    
+
+
+
+```python
+EOFS = []
+
+for j in range(0,stnd_anom.shape[1]):
+        EOFS.append(np.matmul(vweightedAnom, eigvecs[j])/np.linalg.norm(np.matmul(NanlessAnom, eigvecs[j])))
+EOF1 = np.array(EOFS).T
+```
+
+
+```python
+#for i in range(0,33):
+#    test1 = pd.DataFrame(EOF1[:,i])
+#    test2 = test1.dropna()
+ #   test3 = test2.to_numpy()
+ #   print(np.linalg.norm(test3))
+```
+
+
+```python
+plt.figure(figsize=(10,5))
+plt.contourf(xxair,yyair, 0-np.reshape(PhysicalEOFs[91*180*0:91*180*1,0],(91,180)),1000, cmap= 'jet')
+
+plt.colorbar()
+```
+
+
+
+
+    <matplotlib.colorbar.Colorbar at 0x216a3842730>
+
+
+
+
+    
+![png](output_68_1.png)
+    
+
+
+
+```python
+np.save('Air and Ocean EOFs (not physical).npy', EOF1)
+```
+
+
+```python
+#Physical EOFs
+np.seterr(divide='ignore', invalid='ignore')
+PhysicalEOFs = EOF1/(weightedA[0:air[0].size+360*418*34] * np.sqrt(thickness[0:air[0].size+360*418*34]) * np.sqrt(density[0:air[0].size+360*418*34]) * np.sqrt(heatCap[0:air[0].size+360*418*34]) * np.sqrt(gridSize[0:air[0].size+360*418*34]))
+```
+
+
+```python
+def f(aw, mode, m, p):
+    if aw == 1:
+        plt.figure(figsize=(10,4))
+        plt.contourf(xxwater,yywater, 0-np.reshape(PhysicalEOFs[air[0].size+360*418*m:air[0].size+360*418*(m+1),mode-1],(418,360)),1000, cmap= 'twilight_shifted')
+        plt.colorbar()
+        plt.title('January Physical EOFs at '+ str(depths[m])+ ' m. Mode '+  str(mode))
+    else: 
+        ig=plt.figure(figsize=(10, 5) )
+
+        # Miller projection:
+        m=Basemap(projection='mill',lat_ts=10,llcrnrlon=lons.min(), \
+          urcrnrlon=lons.max(),llcrnrlat=lats.min(),urcrnrlat=lats.max(), \
+          resolution='c')
+
+        x, y = m(*np.meshgrid(lons,lats))
+
+        m.pcolormesh(x,y,0-np.reshape(PhysicalEOFs[91*180*p:91*180*(p+1),mode-1],(91,180)),shading='flat',cmap=plt.cm.twilight_shifted)
+        m.colorbar(location='right')
+        m.drawcoastlines()
+        m.drawmapboundary()
+        m.drawparallels(np.arange(-90.,90.,30.),labels=[1,0,0,0])
+        m.drawmeridians(np.arange(-180.,180.,60.),labels=[0,0,0,1])
+        plt.title('January Air Physical EOFs at '+ str(levels[p]) + 'hPa. Mode ' + str(mode) )
+interactive(f, aw = (0,1), mode = (1,34), m = (0, 33), p = (0, levels.size))
+```
+
+
+    interactive(children=(IntSlider(value=0, description='aw', max=1), IntSlider(value=17, description='mode', max…
+
+
+
+```python
+np.save('Air and Ocean Physical EOFs (down to 2000m).npy', PhysicalEOFs)
+```
+
+
+```python
+PhysicalEOFs = np.load('Air and Ocean Physical EOFs (down to 2000m).npy')
+```
+
+
+```python
+plt.figure(figsize=(10,4))
+plt.contourf(xxwater,yywater, 0-np.reshape(PhysicalEOFs[air[0].size+360*418*0:air[0].size+360*418*1,0],(418,360)),1000, cmap= 'jet')
+plt.clim(-3*10**-6, 3*10**-6)
+plt.colorbar()
+```
+
+
+
+
+    <matplotlib.colorbar.Colorbar at 0x143339116a0>
+
+
+
+
+    
+![png](output_74_1.png)
+    
+
+
+
+```python
+np.nanmin(PhysicalEOFs[:,0])
+```
+
+
+
+
+    -3.4741296594994454e-06
+
+
+
+
+```python
+plt.figure(figsize=(10,4))
+plt.contourf(xxwater,yywater, 0-np.reshape(PhysicalEOFs[air[0].size+360*418*10:air[0].size+360*418*11,0],(418,360)),1000, cmap= 'twilight_shifted')
+plt.clim(-3*10**-6, 3*10**-6)
+plt.colorbar()
+```
+
+
+
+
+    <matplotlib.colorbar.Colorbar at 0x2d8c42763d0>
+
+
+
+
+    
+![png](output_76_1.png)
+    
+
+
+
+```python
+PhysicalEOFs = np.load('AirandOceanPhysicalEOFs.npy')
+```
+
+# Calculating EOFs while ignoring Material Properties
+
+
+```python
+matlessdf = pd.DataFrame(data = matslessAnom)
+matlessdropna = matlessdf.dropna()
+NoNanNoMat = matlessdropna.to_numpy()
+NoNanNoMat.shape
+```
+
+
+
+
+    (3895864, 33)
+
+
+
+
+```python
+MatlessSigma = np.matmul(NoNanNoMat.T, NoNanNoMat)
+matlessEigenvalues, matlessEigenvectors = scipy.linalg.eig(MatlessSigma)
+```
+
+
+```python
+matlessEigenvectors = matlessEigenvectors.T
+```
+
+
+```python
+NoMatindex = np.argsort(matlessEigenvalues)[::-1]
+NoMateigvals = matlessEigenvalues[NoMatindex]
+NoMateigvecs = matlessEigenvectors[NoMatindex]
+```
+
+
+```python
+num_eval = np.arange(eigvals.shape[0])+1
+MatlessCum = np.cumsum(NoMateigvals)
+```
+
+
+```python
+plt.figure(figsize=(30., 14.))
+fig, ax = plt.subplots()
+
+p1, = plt.plot(num_eval,(NoMateigvals/MatlessCum[-1])*100, 'b', marker = 'o',label = 'Percentage Variance')
+ax.set_ylabel("Percentage Variance")
+ax.yaxis.label.set_color('blue')
+ax.tick_params('y', colors='b')
+
+ax2 = ax.twinx()
+p2, = plt.plot(num_eval,(MatlessCum/MatlessCum[-1])*100,'r', marker = 'x',label = 'Cumulative Percentage Variance')
+ax2.tick_params('y', colors='r')
+ax2.set_ylabel("Cumulative Percentage Variance")
+ax2.yaxis.label.set_color('red')
+
+plt.legend(handles=[p1,p2],loc='center right')
+
+plt.show()
+
+```
+
+    C:\Users\tbui0\Anaconda3\lib\site-packages\numpy\core\_asarray.py:83: ComplexWarning:
+    
+    Casting complex values to real discards the imaginary part
+    
+    C:\Users\tbui0\Anaconda3\lib\site-packages\numpy\core\_asarray.py:83: ComplexWarning:
+    
+    Casting complex values to real discards the imaginary part
+    
+    
+
+
+    <Figure size 2160x1008 with 0 Axes>
+
+
+
+    
+![png](output_84_2.png)
+    
+
+
+
+```python
+MatlessEOFs = []
+```
+
+
+```python
+MatlessEOFS = []
+
+for j in range(0,stnd_anom.shape[1]):
+        MatlessEOFs.append(np.matmul(matslessAnom, NoMateigvecs[j])/np.linalg.norm(np.matmul(NoNanNoMat, NoMateigvecs[j])))
+MatlessEOFs = np.array(MatlessEOFs).T
+MatlessEOFs.shape
+```
+
+
+
+
+    (5509440, 33)
+
+
+
+
+```python
+FizikleEOFs = MatlessEOFs/(weightedA[0:air[0].size+360*418*34] * np.sqrt(thickness[0:air[0].size+360*418*34]) * np.sqrt(gridSize[0:air[0].size+360*418*34]))
+```
+
+
+```python
+plt.figure(figsize=(10,4))
+plt.contourf(xxwater,yywater, 0-np.reshape(FizikleEOFs[air[0].size+360*418*0:air[0].size+360*418*1,0],(418,360)),1000, cmap= 'jet')
+plt.clim(-3e-5, 3e-5)
+plt.colorbar()
+```
+
+
+
+
+    <matplotlib.colorbar.Colorbar at 0x21a2b4982e0>
+
+
+
+
+    
+![png](output_88_1.png)
+    
+
+
+
+```python
+def f(aw, mode, m, p):
+    if aw == 1:
+        plt.figure(figsize=(10,4))
+        plt.contourf(xxwater,yywater, 0-np.reshape(FizikleEOFs[air[0].size+360*418*m:air[0].size+360*418*(m+1),mode-1],(418,360)),1000,
+                     cmap= 'jet')
+        plt.colorbar()
+        plt.title('January Physical EOFs at '+ str(depths[m])+ ' m. Mode '+  str(mode))
+    else: 
+        ig=plt.figure(figsize=(10, 5) )
+
+        # Miller projection:
+        m=Basemap(projection='mill',lat_ts=10,llcrnrlon=lons.min(), \
+          urcrnrlon=lons.max(),llcrnrlat=lats.min(),urcrnrlat=lats.max(), \
+          resolution='c')
+
+        x, y = m(*np.meshgrid(lons,lats))
+
+        m.pcolormesh(x,y,0-np.reshape(FizikleEOFs[91*180*p:91*180*(p+1),mode-1],(91,180)),shading='flat',cmap=plt.cm.jet)
+        m.colorbar(location='right')
+        m.drawcoastlines()
+        m.drawmapboundary()
+        m.drawparallels(np.arange(-90.,90.,30.),labels=[1,0,0,0])
+        m.drawmeridians(np.arange(-180.,180.,60.),labels=[0,0,0,1])
+        plt.title('January Air Physical EOFs at '+ str(levels[p]) + 'hPa. Mode ' + str(mode) )
+interactive(f, aw = (0,1), mode = (1,34), m = (0, 33), p = (0, levels.size))
+```
+
+
+    interactive(children=(IntSlider(value=0, description='aw', max=1), IntSlider(value=17, description='mode', max…
