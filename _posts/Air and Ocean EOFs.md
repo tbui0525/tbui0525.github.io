@@ -11,15 +11,12 @@ from netCDF4 import Dataset
 import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
-import plotly
-import plotly.express as px
 import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import scipy.linalg as la
 import scipy
 import math
-from __future__ import print_function
 from ipywidgets import interact, interactive, fixed, interact_manual
 import ipywidgets as widgets
 import os
