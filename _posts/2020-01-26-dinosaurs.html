@@ -7,7 +7,7 @@ background: '/img/posts/01.jpg'
 ---
 
 
-```.python
+```python
 
 import netCDF4 as nc
 from netCDF4 import Dataset
@@ -29,7 +29,7 @@ from mpl_toolkits.basemap import Basemap
 # Downloading Data
 
 
-```ruby
+```python
 #for year in years:
 #   url = 'https://downloads.psl.noaa.gov/Datasets/godas/pottmp.'+str(year)+'.nc'
 #    r = requests.get(url, allow_redirects = True)
@@ -39,14 +39,14 @@ from mpl_toolkits.basemap import Basemap
 # Compiling and Reformatting Datasets
 
 
-```ruby
+```python
 file = 'C:/Users/tbui0/Downloads/air.mon.mean.nc'
 AirData = nc.Dataset(file)
 
 ```
 
 
-```ruby
+```python
 years = np.arange(1980,2013)
 WaterData = []
 for year in years:
@@ -56,7 +56,7 @@ for year in years:
 ```
 
 
-```ruby
+```python
 lats = AirData.variables['lat'][:]
 lons = AirData.variables['lon'][:]
 time = AirData.variables['time'][:]
@@ -65,12 +65,12 @@ levels = AirData.variables['level'][:]
 ```
 
 
-```ruby
+```python
 air = air[(1980-1871)*12::12, :,:,:]
 ```
 
 
-```ruby
+```python
 CombinedData = []
 for g in range(0, len(WaterData)):
     YEARLY_AIR = np.array(air[g].flatten()).tolist()
@@ -87,7 +87,7 @@ CombinedData.shape
 
 
 
-```ruby
+```python
 #Replaces with Nan because of how GODAS data is formatted
 for i in range(0, CombinedData.shape[0]):
     for j in range(0, CombinedData.shape[1]):
@@ -559,11 +559,6 @@ plt.show()
 
 
 
-    
-![png](output_65_2.png)
-    
-
-
 
 ```python
 EOFS = []
@@ -591,14 +586,6 @@ plt.colorbar()
 ```
 
 
-
-
-
-
-
-    
-![png](output_68_1.png)
-    
 
 
 
@@ -664,26 +651,6 @@ plt.colorbar()
 
 
 
-    <matplotlib.colorbar.Colorbar at 0x143339116a0>
-
-
-
-
-    
-![png](output_74_1.png)
-    
-
-
-
-```python
-np.nanmin(PhysicalEOFs[:,0])
-```
-
-
-
-
-    -3.4741296594994454e-06
-
 
 
 
@@ -695,14 +662,6 @@ plt.colorbar()
 ```
 
 
-
-
-
-
-
-
-    
-![png](output_76_1.png)
     
 
 
@@ -777,13 +736,6 @@ plt.show()
 
 
 
-
-    
-![png](output_84_2.png)
-    
-
-
-
 ```python
 MatlessEOFs = []
 ```
@@ -819,13 +771,6 @@ plt.colorbar()
 ```
 
 
-
-
-
-
-
-    
-![png](output_88_1.png)
     
 
 
@@ -856,6 +801,7 @@ def f(aw, mode, m, p):
         m.drawmeridians(np.arange(-180.,180.,60.),labels=[0,0,0,1])
         plt.title('January Air Physical EOFs at '+ str(levels[p]) + 'hPa. Mode ' + str(mode) )
 interactive(f, aw = (0,1), mode = (1,34), m = (0, 33), p = (0, levels.size))
+
 ```
 
 
