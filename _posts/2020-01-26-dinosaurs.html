@@ -5,7 +5,7 @@ subtitle: "in 3 Dimensional Space."
 date: 2021-08-12 23:45:13 -0400
 background: '/img/posts/01.jpg'
 ---
-```python
+```ruby
     import netCDF4 as nc
     from netCDF4 import Dataset
     import numpy as np
@@ -25,7 +25,7 @@ background: '/img/posts/01.jpg'
 # Downloading Data
 
 
-```python
+```ruby
 #for year in years:
 #   url = 'https://downloads.psl.noaa.gov/Datasets/godas/pottmp.'+str(year)+'.nc'
 #    r = requests.get(url, allow_redirects = True)
@@ -35,14 +35,14 @@ background: '/img/posts/01.jpg'
 # Compiling and Reformatting Datasets
 
 
-```python
+```ruby
 file = 'C:/Users/tbui0/Downloads/air.mon.mean.nc'
 AirData = nc.Dataset(file)
 
 ```
 
 
-```python
+```ruby
 years = np.arange(1980,2013)
 WaterData = []
 for year in years:
@@ -52,7 +52,7 @@ for year in years:
 ```
 
 
-```python
+```ruby
 lats = AirData.variables['lat'][:]
 lons = AirData.variables['lon'][:]
 time = AirData.variables['time'][:]
@@ -61,12 +61,12 @@ levels = AirData.variables['level'][:]
 ```
 
 
-```python
+```ruby
 air = air[(1980-1871)*12::12, :,:,:]
 ```
 
 
-```python
+```ruby
 CombinedData = []
 for g in range(0, len(WaterData)):
     YEARLY_AIR = np.array(air[g].flatten()).tolist()
@@ -83,7 +83,7 @@ CombinedData.shape
 
 
 
-```python
+```ruby
 #Replaces with Nan because of how GODAS data is formatted
 for i in range(0, CombinedData.shape[0]):
     for j in range(0, CombinedData.shape[1]):
