@@ -1,6 +1,6 @@
 ---
 layout: post
-title: "Computing EOFs for Air and Ocean temperature"
+title: "Hello"
 subtitle: "in 3 Dimensional Space."
 date: 2021-08-12 23:45:13 -0400
 background: '/img/posts/01.jpg'
@@ -911,7 +911,4 @@ def f(aw, mode, m, p):
         plt.title('January Air Physical EOFs at '+ str(levels[p]) + 'hPa. Mode ' + str(mode) )
 interactive(f, aw = (0,1), mode = (1,34), m = (0, 33), p = (0, levels.size))
 ```
-
-
-    interactive(children=(IntSlider(value=0, description='aw', max=1), IntSlider(value=17, description='mode', max…
 
